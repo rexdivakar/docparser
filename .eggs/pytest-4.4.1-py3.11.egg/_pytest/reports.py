@@ -22,12 +22,9 @@ def getslaveinfoline(node):
     except AttributeError:
         d = node.slaveinfo
         ver = "%s.%s.%s" % d["version_info"][:3]
-        node._slaveinfocache = s = "[%s] %s -- Python %s %s" % (
-            d["id"],
-            d["sysplatform"],
-            ver,
-            d["executable"],
-        )
+        node._slaveinfocache = (
+            s
+        ) = f'[{d["id"]}] {d["sysplatform"]} -- Python {ver} {d["executable"]}'
         return s
 
 
@@ -263,10 +260,13 @@ def _report_unserialization_failure(type_name, report_class, reportdict):
     url = "https://github.com/pytest-dev/pytest/issues"
     stream = py.io.TextIO()
     pprint("-" * 100, stream=stream)
-    pprint("INTERNALERROR: Unknown entry type returned: %s" % type_name, stream=stream)
-    pprint("report_name: %s" % report_class, stream=stream)
+    pprint(
+        f"INTERNALERROR: Unknown entry type returned: {type_name}",
+        stream=stream,
+    )
+    pprint(f"report_name: {report_class}", stream=stream)
     pprint(reportdict, stream=stream)
-    pprint("Please report this bug at %s" % url, stream=stream)
+    pprint(f"Please report this bug at {url}", stream=stream)
     pprint("-" * 100, stream=stream)
     raise RuntimeError(stream.getvalue())
 
@@ -343,28 +343,29 @@ class TestReport(BaseReport):
         duration = call.stop - call.start
         keywords = {x: 1 for x in item.keywords}
         excinfo = call.excinfo
-        sections = []
         if not call.excinfo:
             outcome = "passed"
             longrepr = None
+        elif not isinstance(excinfo, ExceptionInfo):
+            outcome = "failed"
+            longrepr = excinfo
+        elif excinfo.errisinstance(skip.Exception):
+            outcome = "skipped"
+            r = excinfo._getreprcrash()
+            longrepr = (str(r.path), r.lineno, r.message)
         else:
-            if not isinstance(excinfo, ExceptionInfo):
-                outcome = "failed"
-                longrepr = excinfo
-            elif excinfo.errisinstance(skip.Exception):
-                outcome = "skipped"
-                r = excinfo._getreprcrash()
-                longrepr = (str(r.path), r.lineno, r.message)
-            else:
-                outcome = "failed"
-                if call.when == "call":
-                    longrepr = item.repr_failure(excinfo)
-                else:  # exception in setup or teardown
-                    longrepr = item._repr_failure_py(
-                        excinfo, style=item.config.option.tbstyle
-                    )
-        for rwhen, key, content in item._report_sections:
-            sections.append(("Captured %s %s" % (key, rwhen), content))
+            outcome = "failed"
+            longrepr = (
+                item.repr_failure(excinfo)
+                if call.when == "call"
+                else item._repr_failure_py(
+                    excinfo, style=item.config.option.tbstyle
+                )
+            )
+        sections = [
+            (f"Captured {key} {rwhen}", content)
+            for rwhen, key, content in item._report_sections
+        ]
         return cls(
             item.nodeid,
             item.location,
@@ -422,6 +423,4 @@ def pytest_report_from_serializable(data):
             return TestReport._from_json(data)
         elif data["_report_type"] == "CollectReport":
             return CollectReport._from_json(data)
-        assert False, "Unknown report_type unserialize data: {}".format(
-            data["_report_type"]
-        )
+        assert False, f'Unknown report_type unserialize data: {data["_report_type"]}'

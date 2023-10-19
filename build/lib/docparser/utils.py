@@ -9,10 +9,9 @@ from .data import lang_mapping
 
 def count_pdf_pages(pdf_path):
     try:
-        pdf_file = open(pdf_path, 'rb')
-        pdf_reader = PyPDF2.PdfReader(pdf_file)
-        num_pages = len(pdf_reader.pages)
-        pdf_file.close()
+        with open(pdf_path, 'rb') as pdf_file:
+            pdf_reader = PyPDF2.PdfReader(pdf_file)
+            num_pages = len(pdf_reader.pages)
         return num_pages
 
     except FileNotFoundError:
@@ -23,10 +22,7 @@ def count_pdf_pages(pdf_path):
 
 
 def verify_lang(lang): # checks if lang is a proper string that can be passed to tesseract. for example: 'ori+eng', 'ori', etc...
-    for lang_i in lang.split('+'):
-        if lang_i not in lang_mapping:
-            return False
-    return True
+    return all(lang_i in lang_mapping for lang_i in lang.split('+'))
 
 
 def verify_langs(page_settings, num_pages):
@@ -34,12 +30,8 @@ def verify_langs(page_settings, num_pages):
     for page_no in page_settings:
         if page_no < 1 or page_no > num_pages or type(page_no) != int:
             return False
-    
-    for lang in page_settings.values():
-        if not verify_lang(lang):
-            return False
-        
-    return True
+
+    return all(verify_lang(lang) for lang in page_settings.values())
 
 
 def group_pages(page_settings):
@@ -55,10 +47,10 @@ def group_pages(page_settings):
 
 
 def get_page_images(pdf_path, dpi, first_page, last_page):
-    pages = convert_from_path(
+    return convert_from_path(
         pdf_path,
         dpi,
         poppler_path=r'C:\ai_sem_7\poppler-0.68.0_x86\poppler-0.68.0\bin',
-        first_page=first_page, last_page=last_page,
+        first_page=first_page,
+        last_page=last_page,
     )
-    return pages

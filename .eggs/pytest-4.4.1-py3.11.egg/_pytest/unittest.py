@@ -66,16 +66,18 @@ class UnitTestCase(Class):
     def _inject_setup_teardown_fixtures(self, cls):
         """Injects a hidden auto-use fixture to invoke setUpClass/setup_method and corresponding
         teardown functions (#517)"""
-        class_fixture = _make_xunit_fixture(
+        if class_fixture := _make_xunit_fixture(
             cls, "setUpClass", "tearDownClass", scope="class", pass_self=False
-        )
-        if class_fixture:
+        ):
             cls.__pytest_class_setup = class_fixture
 
-        method_fixture = _make_xunit_fixture(
-            cls, "setup_method", "teardown_method", scope="function", pass_self=True
-        )
-        if method_fixture:
+        if method_fixture := _make_xunit_fixture(
+            cls,
+            "setup_method",
+            "teardown_method",
+            scope="function",
+            pass_self=True,
+        ):
             cls.__pytest_method_setup = method_fixture
 
 
@@ -219,18 +221,16 @@ class TestCaseFunction(Function):
     def runtest(self):
         if self.config.pluginmanager.get_plugin("pdbinvoke") is None:
             self._testcase(result=self)
+        elif self._handle_skip():
+            return
         else:
-            # disables tearDown and cleanups for post mortem debugging (see #1890)
-            if self._handle_skip():
-                return
             self._testcase.debug()
 
     def _prunetraceback(self, excinfo):
         Function._prunetraceback(self, excinfo)
-        traceback = excinfo.traceback.filter(
+        if traceback := excinfo.traceback.filter(
             lambda x: not x.frame.f_globals.get("__unittest")
-        )
-        if traceback:
+        ):
             excinfo.traceback = traceback
 
 

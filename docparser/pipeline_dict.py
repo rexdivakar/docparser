@@ -20,7 +20,7 @@ def chunk_total_text(total_text, word_limit):
     chunks = []
 
     for line in lines:
-        if len(chunks) == 0:
+        if not chunks:
             chunks.append(line)
         elif len(chunks[-1]) + len(line) < word_limit:
             chunks[-1] = chunks[-1] + '\n' + line
@@ -32,13 +32,13 @@ def chunk_total_text(total_text, word_limit):
 def prompt_template(chunk):
     # input_text_decoded = html.unescape(chunk.read().decode('utf-8'))
     input_text_decoded = chunk
-    messages = [
+    return [
         {
-            "role": "system", 
-            "content": "You will help me parse raw noisy OCR output into neat tables. The output should contain the proper Odia characters instead of escape sequences."
+            "role": "system",
+            "content": "You will help me parse raw noisy OCR output into neat tables. The output should contain the proper Odia characters instead of escape sequences.",
         },
         {
-            "role": "user", 
+            "role": "user",
             "content": """ANSWER WITH AS LITTLE UNNECESSARY TEXT AS POSSIBLE (just the table. no need to describe anything about it at the start.). The table should have three columns:
 1. Word in English
 2. Part of speech it belongs to
@@ -47,18 +47,14 @@ def prompt_template(chunk):
 Here is the raw data. Format it into the table. For example, here are the first two rows of the table:
 
 | a | Adjective&Article   | ଅରୋଟ୍‌ |
-| accordingly |	Adverb  |  ଆଦିଙ୍କ୍‌ ଲେକେ |"""
+| accordingly |	Adverb  |  ଆଦିଙ୍କ୍‌ ଲେକେ |""",
         },
         {
             "role": "assistant",
-            "content": "Sure! Please provide me with the raw data, and I'll format it into a three-column table for you."
+            "content": "Sure! Please provide me with the raw data, and I'll format it into a three-column table for you.",
         },
-        {
-            "role": "user",
-            "content": input_text_decoded
-        }
+        {"role": "user", "content": input_text_decoded},
     ]
-    return messages
 
 
 def query_chatgpt_until_complete(messages, temperature, model):
@@ -105,7 +101,7 @@ def image_to_dict(model, preprocess, device, image, lang, config, mode, openai_a
         openai.api_key = openai_api_key
         gpt_text = query_chatgpt_until_complete(messages, 0.4, gpt_model)
         gpt_outputs.append(gpt_text)
-    
+
     dataframes = [
         pd.read_csv(StringIO(gpt_text), 
                     sep=separator, 
@@ -114,8 +110,4 @@ def image_to_dict(model, preprocess, device, image, lang, config, mode, openai_a
     ]
 
     cleaned_dfs = clean_dataframes(dataframes)
-    data = pd.concat(cleaned_dfs, axis=0).reset_index(drop=True)
-    # print(data.shape)
-    # print(data.head())
-
-    return data
+    return pd.concat(cleaned_dfs, axis=0).reset_index(drop=True)

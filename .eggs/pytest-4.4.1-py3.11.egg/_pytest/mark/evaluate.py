@@ -42,10 +42,10 @@ class MarkEvaluator(object):
         return list(self.item.iter_markers(name=self._mark_name))
 
     def invalidraise(self, exc):
-        raises = self.get("raises")
-        if not raises:
+        if raises := self.get("raises"):
+            return not isinstance(exc, raises)
+        else:
             return
-        return not isinstance(exc, raises)
 
     def istrue(self):
         try:
@@ -53,8 +53,7 @@ class MarkEvaluator(object):
         except TEST_OUTCOME:
             self.exc = sys.exc_info()
             if isinstance(self.exc[1], SyntaxError):
-                msg = [" " * (self.exc[1].offset + 4) + "^"]
-                msg.append("SyntaxError: invalid syntax")
+                msg = [" " * (self.exc[1].offset + 4) + "^", "SyntaxError: invalid syntax"]
             else:
                 msg = traceback.format_exception_only(*self.exc[:2])
             fail(
@@ -111,15 +110,10 @@ class MarkEvaluator(object):
         return False
 
     def get(self, attr, default=None):
-        if self._mark is None:
-            return default
-        return self._mark.kwargs.get(attr, default)
+        return default if self._mark is None else self._mark.kwargs.get(attr, default)
 
     def getexplanation(self):
-        expl = getattr(self, "reason", None) or self.get("reason", None)
-        if not expl:
-            if not hasattr(self, "expr"):
-                return ""
-            else:
-                return "condition: " + str(self.expr)
-        return expl
+        if expl := getattr(self, "reason", None) or self.get("reason", None):
+            return expl
+        else:
+            return "" if not hasattr(self, "expr") else f"condition: {str(self.expr)}"

@@ -17,11 +17,7 @@ def _py_abspath(path):
     special version of abspath
     that will leave paths from jython jars alone
     """
-    if path.startswith("__pyclasspath__"):
-
-        return path
-    else:
-        return os.path.abspath(path)
+    return path if path.startswith("__pyclasspath__") else os.path.abspath(path)
 
 
 def distribution_version(name):
@@ -41,11 +37,10 @@ def initpkg(pkgname, exportdefs, attr=None, eager=False):
     """ initialize given package from the export definitions. """
     attr = attr or {}
     oldmod = sys.modules.get(pkgname)
-    d = {}
     f = getattr(oldmod, "__file__", None)
     if f:
         f = _py_abspath(f)
-    d["__file__"] = f
+    d = {"__file__": f}
     if hasattr(oldmod, "__version__"):
         d["__version__"] = oldmod.__version__
     if hasattr(oldmod, "__loader__"):
@@ -109,7 +104,7 @@ class ApiModule(ModuleType):
                 setattr(self, name, val)
         for name, importspec in importspec.items():
             if isinstance(importspec, dict):
-                subname = "{}.{}".format(self.__name__, name)
+                subname = f"{self.__name__}.{name}"
                 apimod = ApiModule(subname, importspec, implprefix)
                 sys.modules[subname] = apimod
                 setattr(self, name, apimod)
@@ -121,7 +116,7 @@ class ApiModule(ModuleType):
                     modpath = implprefix + modpath
 
                 if not attrname:
-                    subname = "{}.{}".format(self.__name__, name)
+                    subname = f"{self.__name__}.{name}"
                     apimod = AliasModule(subname, modpath)
                     sys.modules[subname] = apimod
                     if "." not in name:
@@ -132,9 +127,9 @@ class ApiModule(ModuleType):
     def __repr__(self):
         repr_list = []
         if hasattr(self, "__version__"):
-            repr_list.append("version=" + repr(self.__version__))
+            repr_list.append(f"version={repr(self.__version__)}")
         if hasattr(self, "__file__"):
-            repr_list.append("from " + repr(self.__file__))
+            repr_list.append(f"from {repr(self.__file__)}")
         if repr_list:
             return "<ApiModule {!r} {}>".format(self.__name__, " ".join(repr_list))
         return "<ApiModule {!r}>".format(self.__name__)
@@ -191,7 +186,7 @@ def AliasModule(modname, modpath, attrname=None):
             mod.append(x)
         return mod[0]
 
-    x = modpath + ("." + attrname if attrname else "")
+    x = modpath + (f".{attrname}" if attrname else "")
     repr_result = "<AliasModule {!r} for {!r}>".format(modname, x)
 
     class AliasModule(ModuleType):

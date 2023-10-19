@@ -180,9 +180,7 @@ class PluginManager:
         if not inspect.isroutine(method):
             return None
         try:
-            res: HookimplOpts | None = getattr(
-                method, self.project_name + "_impl", None
-            )
+            res: HookimplOpts | None = getattr(method, f"{self.project_name}_impl", None)
         except Exception:
             res = {}  # type: ignore[assignment]
         if res is not None and not isinstance(res, dict):
@@ -207,11 +205,10 @@ class PluginManager:
 
         if plugin is None:
             plugin = self.get_plugin(name)
-            if plugin is None:
-                return None
+        if plugin is None:
+            return None
 
-        hookcallers = self.get_hookcallers(plugin)
-        if hookcallers:
+        if hookcallers := self.get_hookcallers(plugin):
             for hookcaller in hookcallers:
                 hookcaller._remove_plugin(plugin)
 
@@ -272,7 +269,7 @@ class PluginManager:
         options for items decorated with :class:`HookspecMarker`.
         """
         method = getattr(module_or_class, name)
-        opts: HookspecOpts | None = getattr(method, self.project_name + "_spec", None)
+        opts: HookspecOpts | None = getattr(method, f"{self.project_name}_spec", None)
         return opts
 
     def get_plugins(self) -> set[Any]:
@@ -292,7 +289,7 @@ class PluginManager:
         <get_name>` instead.
         """
         name: str | None = getattr(plugin, "__name__", None)
-        return name or str(id(plugin))
+        return name or id(plugin)
 
     def get_plugin(self, name: str) -> Any | None:
         """Return the plugin registered under the given name, if any."""
@@ -305,10 +302,10 @@ class PluginManager:
     def get_name(self, plugin: _Plugin) -> str | None:
         """Return the name the plugin is registered under, or ``None`` if
         is isn't."""
-        for name, val in self._name2plugin.items():
-            if plugin == val:
-                return name
-        return None
+        return next(
+            (name for name, val in self._name2plugin.items() if plugin == val),
+            None,
+        )
 
     def _verify_hook(self, hook: HookCaller, hookimpl: HookImpl) -> None:
         if hook.is_historic() and (hookimpl.hookwrapper or hookimpl.wrapper):
@@ -322,9 +319,7 @@ class PluginManager:
         if hook.spec.warn_on_impl:
             _warn_for_function(hook.spec.warn_on_impl, hookimpl.function)
 
-        # positional arg checking
-        notinspec = set(hookimpl.argnames) - set(hook.spec.argnames)
-        if notinspec:
+        if notinspec := set(hookimpl.argnames) - set(hook.spec.argnames):
             raise PluginValidationError(
                 hookimpl.plugin,
                 "Plugin %r for hook %r\nhookimpl definition: %s\n"
@@ -421,9 +416,11 @@ class PluginManager:
             return None
         hookcallers = []
         for hookcaller in self.hook.__dict__.values():
-            for hookimpl in hookcaller.get_hookimpls():
-                if hookimpl.plugin is plugin:
-                    hookcallers.append(hookcaller)
+            hookcallers.extend(
+                hookcaller
+                for hookimpl in hookcaller.get_hookimpls()
+                if hookimpl.plugin is plugin
+            )
         return hookcallers
 
     def add_hookcall_monitoring(
@@ -495,8 +492,9 @@ class PluginManager:
         method which manages calls to all registered plugins except the ones
         from remove_plugins."""
         orig: HookCaller = getattr(self.hook, name)
-        plugins_to_remove = {plug for plug in remove_plugins if hasattr(plug, name)}
-        if plugins_to_remove:
+        if plugins_to_remove := {
+            plug for plug in remove_plugins if hasattr(plug, name)
+        }:
             return _SubsetHookCaller(orig, plugins_to_remove)
         return orig
 

@@ -49,9 +49,9 @@ def getfailure(failure):
         lines = explanation.splitlines()
         if not lines:
             lines.append("")
-        lines[0] += " << %s" % (value,)
+        lines[0] += f" << {value}"
         explanation = "\n".join(lines)
-    text = "%s: %s" % (failure.cause[0].__name__, explanation)
+    text = f"{failure.cause[0].__name__}: {explanation}"
     if text.startswith("AssertionError: assert "):
         text = text[16:]
     return text
@@ -116,7 +116,7 @@ class DebugInterpreter(ast.NodeVisitor):
                 raise Failure()
             return None, None
         else:
-            raise AssertionError("can't handle %s" %(node,))
+            raise AssertionError(f"can't handle {node}")
 
     def _compile(self, source, mode="eval"):
         return compile(source, "<assertion interpretation>", mode)
@@ -138,9 +138,7 @@ class DebugInterpreter(ast.NodeVisitor):
         except Exception:
             # have to assume it isn't
             local = False
-        if not local:
-            return name.id, result
-        return explanation, result
+        return (name.id, result) if not local else (explanation, result)
 
     def visit_Compare(self, comp):
         left = comp.left
@@ -148,9 +146,8 @@ class DebugInterpreter(ast.NodeVisitor):
         for op, next_op in zip(comp.ops, comp.comparators):
             next_explanation, next_result = self.visit(next_op)
             op_symbol = operator_map[op.__class__]
-            explanation = "%s %s %s" % (left_explanation, op_symbol,
-                                        next_explanation)
-            source = "__exprinfo_left %s __exprinfo_right" % (op_symbol,)
+            explanation = f"{left_explanation} {op_symbol} {next_explanation}"
+            source = f"__exprinfo_left {op_symbol} __exprinfo_right"
             co = self._compile(source)
             try:
                 result = self.frame.eval(co, __exprinfo_left=left_result,
@@ -166,10 +163,8 @@ class DebugInterpreter(ast.NodeVisitor):
                 break
             left_explanation, left_result = next_explanation, next_result
 
-        rcomp = py.code._reprcompare
-        if rcomp:
-            res = rcomp(op_symbol, left_result, next_result)
-            if res:
+        if rcomp := py.code._reprcompare:
+            if res := rcomp(op_symbol, left_result, next_result):
                 explanation = res
         return explanation, result
 
@@ -181,8 +176,8 @@ class DebugInterpreter(ast.NodeVisitor):
             explanations.append(explanation)
             if result == is_or:
                 break
-        name = is_or and " or " or " and "
-        explanation = "(" + name.join(explanations) + ")"
+        name = " or " if is_or else " and "
+        explanation = f"({name.join(explanations)})"
         return explanation, result
 
     def visit_UnaryOp(self, unary):
@@ -200,9 +195,8 @@ class DebugInterpreter(ast.NodeVisitor):
         left_explanation, left_result = self.visit(binop.left)
         right_explanation, right_result = self.visit(binop.right)
         symbol = operator_map[binop.op.__class__]
-        explanation = "(%s %s %s)" % (left_explanation, symbol,
-                                      right_explanation)
-        source = "__exprinfo_left %s __exprinfo_right" % (symbol,)
+        explanation = f"({left_explanation} {symbol} {right_explanation})"
+        source = f"__exprinfo_left {symbol} __exprinfo_right"
         co = self._compile(source)
         try:
             result = self.frame.eval(co, __exprinfo_left=left_result,
@@ -218,13 +212,13 @@ class DebugInterpreter(ast.NodeVisitor):
         arguments = []
         for arg in call.args:
             arg_explanation, arg_result = self.visit(arg)
-            arg_name = "__exprinfo_%s" % (len(ns),)
+            arg_name = f"__exprinfo_{len(ns)}"
             ns[arg_name] = arg_result
             arguments.append(arg_name)
             arg_explanations.append(arg_explanation)
         for keyword in call.keywords:
             arg_explanation, arg_result = self.visit(keyword.value)
-            arg_name = "__exprinfo_%s" % (len(ns),)
+            arg_name = f"__exprinfo_{len(ns)}"
             ns[arg_name] = arg_result
             keyword_source = "%s=%%s" % (keyword.arg)
             arguments.append(keyword_source % (arg_name,))
@@ -233,18 +227,18 @@ class DebugInterpreter(ast.NodeVisitor):
             arg_explanation, arg_result = self.visit(call.starargs)
             arg_name = "__exprinfo_star"
             ns[arg_name] = arg_result
-            arguments.append("*%s" % (arg_name,))
-            arg_explanations.append("*%s" % (arg_explanation,))
+            arguments.append(f"*{arg_name}")
+            arg_explanations.append(f"*{arg_explanation}")
         if call.kwargs:
             arg_explanation, arg_result = self.visit(call.kwargs)
             arg_name = "__exprinfo_kwds"
             ns[arg_name] = arg_result
-            arguments.append("**%s" % (arg_name,))
-            arg_explanations.append("**%s" % (arg_explanation,))
+            arguments.append(f"**{arg_name}")
+            arg_explanations.append(f"**{arg_explanation}")
         args_explained = ", ".join(arg_explanations)
-        explanation = "%s(%s)" % (func_explanation, args_explained)
+        explanation = f"{func_explanation}({args_explained})"
         args = ", ".join(arguments)
-        source = "__exprinfo_func(%s)" % (args,)
+        source = f"__exprinfo_func({args})"
         co = self._compile(source)
         try:
             result = self.frame.eval(co, **ns)
@@ -268,8 +262,8 @@ class DebugInterpreter(ast.NodeVisitor):
         if not isinstance(attr.ctx, ast.Load):
             return self.generic_visit(attr)
         source_explanation, source_result = self.visit(attr.value)
-        explanation = "%s.%s" % (source_explanation, attr.attr)
-        source = "__exprinfo_expr.%s" % (attr.attr,)
+        explanation = f"{source_explanation}.{attr.attr}"
+        source = f"__exprinfo_expr.{attr.attr}"
         co = self._compile(source)
         try:
             result = self.frame.eval(co, __exprinfo_expr=source_result)
@@ -280,7 +274,7 @@ class DebugInterpreter(ast.NodeVisitor):
                                               source_explanation, attr.attr)
         # Check if the attr is from an instance.
         source = "%r in getattr(__exprinfo_expr, '__dict__', {})"
-        source = source % (attr.attr,)
+        source %= (attr.attr,)
         co = self._compile(source)
         try:
             from_instance = self.frame.eval(co, __exprinfo_expr=source_result)
@@ -295,9 +289,9 @@ class DebugInterpreter(ast.NodeVisitor):
     def visit_Assert(self, assrt):
         test_explanation, test_result = self.visit(assrt.test)
         if test_explanation.startswith("False\n{False =") and \
-                test_explanation.endswith("\n"):
+                    test_explanation.endswith("\n"):
             test_explanation = test_explanation[15:-2]
-        explanation = "assert %s" % (test_explanation,)
+        explanation = f"assert {test_explanation}"
         if not test_result:
             try:
                 raise BuiltinAssertionError
@@ -307,7 +301,7 @@ class DebugInterpreter(ast.NodeVisitor):
 
     def visit_Assign(self, assign):
         value_explanation, value_result = self.visit(assign.value)
-        explanation = "... = %s" % (value_explanation,)
+        explanation = f"... = {value_explanation}"
         name = ast.Name("__exprinfo_expr", ast.Load(),
                         lineno=assign.value.lineno,
                         col_offset=assign.value.col_offset)

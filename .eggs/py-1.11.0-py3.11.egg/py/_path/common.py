@@ -67,7 +67,7 @@ class Checkers:
 
     def ext(self, arg):
         if not arg.startswith('.'):
-            arg = '.' + arg
+            arg = f'.{arg}'
         return self.path.ext == arg
 
     def exists(self):
@@ -108,9 +108,8 @@ class Checkers:
                 if py.code.getrawcode(meth).co_argcount > 1:
                     if (not meth(value)) ^ invert:
                         return False
-                else:
-                    if bool(value) ^ bool(meth()) ^ invert:
-                        return False
+                elif bool(value) ^ bool(meth()) ^ invert:
+                    return False
             except (py.error.ENOENT, py.error.ENOTDIR, py.error.EBUSY):
                 # EBUSY feels not entirely correct,
                 # but its kind of necessary since ENOMEDIUM
@@ -119,7 +118,7 @@ class Checkers:
                     if name in kw:
                         if kw.get(name):
                             return False
-                    name = 'not' + name
+                    name = f'not{name}'
                     if name in kw:
                         if not kw.get(name):
                             return False
@@ -179,11 +178,7 @@ class PathBase(object):
     def readlines(self, cr=1):
         """ read and return a list of lines from the path. if cr is False, the
 newline will be removed from the end of each line. """
-        if sys.version_info < (3, ):
-            mode = 'rU'
-        else:  # python 3 deprecates mode "U" in favor of "newline" option
-            mode = 'r'
-
+        mode = 'rU' if sys.version_info < (3, ) else 'r'
         if not cr:
             content = self.read(mode)
             return content.split('\n')
@@ -297,15 +292,11 @@ newline will be removed from the end of each line. """
                 return str(dest)
             self2base = self.relto(base)
             reldest = dest.relto(base)
-            if self2base:
-                n = self2base.count(self.sep) + 1
-            else:
-                n = 0
+            n = self2base.count(self.sep) + 1 if self2base else 0
             l = [os.pardir] * n
             if reldest:
                 l.append(reldest)
-            target = dest.sep.join(l)
-            return target
+            return dest.sep.join(l)
         except AttributeError:
             return str(dest)
 
@@ -380,8 +371,7 @@ newline will be removed from the end of each line. """
 
             sort if True will sort entries within each directory level.
         """
-        for x in Visitor(fil, rec, ignore, bf, sort).gen(self):
-            yield x
+        yield from Visitor(fil, rec, ignore, bf, sort).gen(self)
 
     def _sortlist(self, res, sort):
         if sort:
@@ -425,15 +415,13 @@ class Visitor:
                     if p.check(dir=1) and (rec is None or rec(p))])
         if not self.breadthfirst:
             for subdir in dirs:
-                for p in self.gen(subdir):
-                    yield p
+                yield from self.gen(subdir)
         for p in self.optsort(entries):
             if self.fil is None or self.fil(p):
                 yield p
         if self.breadthfirst:
             for subdir in dirs:
-                for p in self.gen(subdir):
-                    yield p
+                yield from self.gen(subdir)
 
 class FNMatcher:
     def __init__(self, pattern):
@@ -455,5 +443,5 @@ class FNMatcher:
         else:
             name = str(path) # path.strpath # XXX svn?
             if not os.path.isabs(pattern):
-                pattern = '*' + path.sep + pattern
+                pattern = f'*{path.sep}{pattern}'
         return fnmatch.fnmatch(name, pattern)

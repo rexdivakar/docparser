@@ -38,10 +38,9 @@ def reprocess(model, preprocess, device, mode, idx, ocr_data, image, languages_c
     )
     class_idx = logits_per_region.argmax(axis=1)[0]
     predicted_lang_ocr = languages_ocr[class_idx]
-    word = pytesseract.image_to_string(region, 
-                                    lang=predicted_lang_ocr, 
-                                    config='--psm 8') # word level parsing
-    return word
+    return pytesseract.image_to_string(
+        region, lang=predicted_lang_ocr, config='--psm 8'
+    )
 
 
 # dict_keys(['level', 'page_num', 'block_num', 'par_num', 'line_num', 'word_num', 'left', 'top', 'width', 'height', 'conf', 'text'])
@@ -49,9 +48,7 @@ def image_to_string_v2(model, preprocess, device, image, lang, config, mode):
     assert mode in ['tesseract', 'cliptesseract']
 
     if mode == 'tesseract':
-        string = pytesseract.image_to_string(image, lang=lang, config=config)
-        return string
-    
+        return pytesseract.image_to_string(image, lang=lang, config=config)
     elif mode == 'cliptesseract':
         if type(image) == str:
             image = Image.open(image)
@@ -64,9 +61,6 @@ def image_to_string_v2(model, preprocess, device, image, lang, config, mode):
             if data['level'][i] == 5:
                 data['text'][i] = reprocess(model, preprocess, device, mode, i, data, image, languages_clip, languages_ocr)
                 total_text.append(data['text'][i] + ' ')
-            elif data['level'][i] == 4:
+            elif data['level'][i] in [4, 3]:
                 total_text.append('\n')
-            elif data['level'][i] == 3:
-                total_text.append('\n')
-        total_text = ''.join(total_text)
-        return total_text
+        return ''.join(total_text)

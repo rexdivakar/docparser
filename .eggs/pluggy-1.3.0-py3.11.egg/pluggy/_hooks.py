@@ -139,7 +139,7 @@ class HookspecMarker:
                 "historic": historic,
                 "warn_on_impl": warn_on_impl,
             }
-            setattr(func, self.project_name + "_spec", opts)
+            setattr(func, f"{self.project_name}_spec", opts)
             return func
 
         if function is not None:
@@ -258,7 +258,7 @@ class HookimplMarker:
                 "trylast": trylast,
                 "specname": specname,
             }
-            setattr(func, self.project_name + "_impl", opts)
+            setattr(func, f"{self.project_name}_impl", opts)
             return func
 
         if function is None:
@@ -315,16 +315,14 @@ def varnames(func: object) -> tuple[tuple[str, ...], tuple[str, ...]]:
         if param.kind in _valid_param_kinds
     }
     args = tuple(_valid_params)
-    defaults = (
+    if defaults := (
         tuple(
             param.default
             for param in _valid_params.values()
             if param.default is not param.empty
         )
         or None
-    )
-
-    if defaults:
+    ):
         index = -len(defaults)
         args, kwargs = args[:index], tuple(args[index:])
     else:
@@ -332,10 +330,7 @@ def varnames(func: object) -> tuple[tuple[str, ...], tuple[str, ...]]:
 
     # strip any implicit instance arg
     # pypy3 uses "obj" instead of "self" for default dunder methods
-    if not _PYPY:
-        implicit_names: tuple[str, ...] = ("self",)
-    else:
-        implicit_names = ("self", "obj")
+    implicit_names = ("self", ) if not _PYPY else ("self", "obj")
     if args:
         qualname: str = getattr(func, "__qualname__", "")
         if inspect.ismethod(func) or ("." in qualname and args[0] in implicit_names):
@@ -433,12 +428,14 @@ class HookCaller:
 
     def _add_hookimpl(self, hookimpl: HookImpl) -> None:
         """Add an implementation to the callback chain."""
-        for i, method in enumerate(self._hookimpls):
-            if method.hookwrapper or method.wrapper:
-                splitpoint = i
-                break
-        else:
-            splitpoint = len(self._hookimpls)
+        splitpoint = next(
+            (
+                i
+                for i, method in enumerate(self._hookimpls)
+                if method.hookwrapper or method.wrapper
+            ),
+            len(self._hookimpls),
+        )
         if hookimpl.hookwrapper or hookimpl.wrapper:
             start, end = splitpoint, len(self._hookimpls)
         else:
@@ -470,8 +467,7 @@ class HookCaller:
                         if argname not in kwargs.keys()
                     )
                     warnings.warn(
-                        "Argument(s) {} which are declared in the hookspec "
-                        "cannot be found in this hook call".format(notincall),
+                        f"Argument(s) {notincall} which are declared in the hookspec cannot be found in this hook call",
                         stacklevel=2,
                     )
                     break
@@ -544,7 +540,8 @@ class HookCaller:
             while (
                 i >= 0
                 and hookimpls[i].tryfirst
-                and not (hookimpls[i].hookwrapper or hookimpls[i].wrapper)
+                and not hookimpls[i].hookwrapper
+                and not hookimpls[i].wrapper
             ):
                 i -= 1
             hookimpls.insert(i + 1, hookimpl)
