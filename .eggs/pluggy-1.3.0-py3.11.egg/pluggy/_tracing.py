@@ -32,11 +32,9 @@ class TagTracer:
         content = " ".join(map(str, args))
         indent = "  " * self.indent
 
-        lines = ["{}{} [{}]\n".format(indent, content, ":".join(tags))]
+        lines = [f'{indent}{content} [{":".join(tags)}]\n']
 
-        for name, value in extra.items():
-            lines.append(f"{indent}    {name}: {value}\n")
-
+        lines.extend(f"{indent}    {name}: {value}\n" for name, value in extra.items())
         return "".join(lines)
 
     def _processmessage(self, tags: tuple[str, ...], args: tuple[object, ...]) -> None:

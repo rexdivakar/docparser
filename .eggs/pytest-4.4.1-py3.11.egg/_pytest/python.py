@@ -54,9 +54,7 @@ def pyobj_property(name):
         if node is not None:
             return node.obj
 
-    doc = "python %s object this node was collected from (can be None)." % (
-        name.lower(),
-    )
+    doc = f"python {name.lower()} object this node was collected from (can be None)."
     return property(get, None, None, doc)
 
 
@@ -166,8 +164,10 @@ def pytest_pyfunc_call(pyfuncitem):
     testfunction = pyfuncitem.obj
     iscoroutinefunction = getattr(inspect, "iscoroutinefunction", None)
     if iscoroutinefunction is not None and iscoroutinefunction(testfunction):
-        msg = "Coroutine functions are not natively supported and have been skipped.\n"
-        msg += "You need to install a suitable plugin for your async framework, for example:\n"
+        msg = (
+            "Coroutine functions are not natively supported and have been skipped.\n"
+            + "You need to install a suitable plugin for your async framework, for example:\n"
+        )
         msg += "  - pytest-asyncio\n"
         msg += "  - pytest-trio\n"
         msg += "  - pytest-tornasync"
@@ -367,8 +367,9 @@ class PyCollector(PyobjMixin, nodes.Collector):
         # NB. we avoid random getattrs and peek in the __dict__ instead
         # (XXX originally introduced from a PyPy need, still true?)
         dicts = [getattr(self.obj, "__dict__", {})]
-        for basecls in inspect.getmro(self.obj.__class__):
-            dicts.append(basecls.__dict__)
+        dicts.extend(
+            basecls.__dict__ for basecls in inspect.getmro(self.obj.__class__)
+        )
         seen = {}
         values = []
         for dic in dicts:
@@ -425,7 +426,7 @@ class PyCollector(PyobjMixin, nodes.Collector):
             fixtureinfo.prune_dependency_tree()
 
             for callspec in metafunc._calls:
-                subname = "%s[%s]" % (name, callspec.id)
+                subname = f"{name}[{callspec.id}]"
                 yield Function(
                     name=subname,
                     parent=self,
@@ -600,14 +601,11 @@ class Package(Module):
         # hooks with all conftest.py filesall conftest.py
         pm = self.config.pluginmanager
         my_conftestmodules = pm._getconftestmodules(fspath)
-        remove_mods = pm._conftest_plugins.difference(my_conftestmodules)
-        if remove_mods:
-            # one or more conftests are not in use at this fspath
-            proxy = FSHookProxy(fspath, pm, remove_mods)
-        else:
-            # all plugis are active for this fspath
-            proxy = self.config.hook
-        return proxy
+        return (
+            FSHookProxy(fspath, pm, remove_mods)
+            if (remove_mods := pm._conftest_plugins.difference(my_conftestmodules))
+            else self.config.hook
+        )
 
     def _collectfile(self, path, handle_dupes=True):
         assert path.isfile(), "%r is not a file (isdir=%r, exists=%r, islink=%r)" % (
@@ -661,8 +659,7 @@ class Package(Module):
                 continue
 
             if is_file:
-                for x in self._collectfile(path):
-                    yield x
+                yield from self._collectfile(path)
             elif not path.isdir():
                 # Broken symlink or invalid/missing file.
                 continue
@@ -685,10 +682,7 @@ def _get_xunit_setup_teardown(holder, attr_name, param_obj=None):
         arg_count = result.__code__.co_argcount
         if inspect.ismethod(result):
             arg_count -= 1
-        if arg_count:
-            return lambda: result(param_obj)
-        else:
-            return result
+        return (lambda: result(param_obj)) if arg_count else result
 
 
 def _call_with_optional_argument(func, arg):
@@ -820,25 +814,26 @@ class FunctionMixin(PyobjMixin):
             self.obj = self._getobj()
 
     def _prunetraceback(self, excinfo):
-        if hasattr(self, "_obj") and not self.config.option.fulltrace:
-            code = _pytest._code.Code(get_real_func(self.obj))
-            path, firstlineno = code.path, code.firstlineno
-            traceback = excinfo.traceback
-            ntraceback = traceback.cut(path=path, firstlineno=firstlineno)
-            if ntraceback == traceback:
-                ntraceback = ntraceback.cut(path=path)
-                if ntraceback == traceback:
-                    ntraceback = ntraceback.filter(filter_traceback)
-                    if not ntraceback:
-                        ntraceback = traceback
+        if not hasattr(self, "_obj") or self.config.option.fulltrace:
+            return
+        code = _pytest._code.Code(get_real_func(self.obj))
+        path, firstlineno = code.path, code.firstlineno
+        traceback = excinfo.traceback
+        ntraceback = traceback.cut(path=path, firstlineno=firstlineno)
+        if ntraceback == traceback:
+            ntraceback = ntraceback.cut(path=path)
+        if ntraceback == traceback:
+            ntraceback = ntraceback.filter(filter_traceback)
+            if not ntraceback:
+                ntraceback = traceback
 
-            excinfo.traceback = ntraceback.filter()
-            # issue364: mark all but first and last frames to
-            # only show a single-line message for each frame
-            if self.config.option.tbstyle == "auto":
-                if len(excinfo.traceback) > 2:
-                    for entry in excinfo.traceback[1:-1]:
-                        entry.set_repr_style("short")
+        excinfo.traceback = ntraceback.filter()
+        # issue364: mark all but first and last frames to
+        # only show a single-line message for each frame
+        if self.config.option.tbstyle == "auto":
+            if len(excinfo.traceback) > 2:
+                for entry in excinfo.traceback[1:-1]:
+                    entry.set_repr_style("short")
 
     def repr_failure(self, excinfo, outerr=None):
         assert outerr is None, "XXX outerr usage is deprecated"
@@ -849,14 +844,12 @@ class FunctionMixin(PyobjMixin):
 
 
 def hasinit(obj):
-    init = getattr(obj, "__init__", None)
-    if init:
+    if init := getattr(obj, "__init__", None):
         return init != object.__init__
 
 
 def hasnew(obj):
-    new = getattr(obj, "__new__", None)
-    if new:
+    if new := getattr(obj, "__new__", None):
         return new != object.__new__
 
 
@@ -1017,7 +1010,7 @@ class Metafunc(fixtures.FuncargnamesCompatAttr):
         ids = self._resolve_arg_ids(argnames, ids, parameters, item=self.definition)
 
         scopenum = scope2index(
-            scope, descr="parametrize() call in {}".format(self.function.__name__)
+            scope, descr=f"parametrize() call in {self.function.__name__}"
         )
 
         # create the new calls: if we are parametrize() multiple times (by applying the decorator
@@ -1092,9 +1085,7 @@ class Metafunc(fixtures.FuncargnamesCompatAttr):
             for arg in indirect:
                 if arg not in argnames:
                     fail(
-                        "In {}: indirect fixture '{}' doesn't exist".format(
-                            self.function.__name__, arg
-                        ),
+                        f"In {self.function.__name__}: indirect fixture '{arg}' doesn't exist",
                         pytrace=False,
                     )
                 valtypes[arg] = "params"
@@ -1114,9 +1105,7 @@ class Metafunc(fixtures.FuncargnamesCompatAttr):
             if arg not in self.fixturenames:
                 if arg in default_arg_names:
                     fail(
-                        "In {}: function already takes an argument '{}' with a default value".format(
-                            func_name, arg
-                        ),
+                        f"In {func_name}: function already takes an argument '{arg}' with a default value",
                         pytrace=False,
                     )
                 else:
@@ -1124,10 +1113,7 @@ class Metafunc(fixtures.FuncargnamesCompatAttr):
                         name = "fixture" if arg in indirect else "argument"
                     else:
                         name = "fixture" if indirect else "argument"
-                    fail(
-                        "In {}: function uses no {} '{}'".format(func_name, name, arg),
-                        pytrace=False,
-                    )
+                    fail(f"In {func_name}: function uses no {name} '{arg}'", pytrace=False)
 
 
 def _find_parametrized_scope(argnames, arg2fixturedefs, indirect):
@@ -1149,12 +1135,11 @@ def _find_parametrized_scope(argnames, arg2fixturedefs, indirect):
 
     if all_arguments_are_fixtures:
         fixturedefs = arg2fixturedefs or {}
-        used_scopes = [
+        if used_scopes := [
             fixturedef[0].scope
             for name, fixturedef in fixturedefs.items()
             if name in argnames
-        ]
-        if used_scopes:
+        ]:
             # Takes the most narrow scope from used fixtures
             for scope in reversed(scopes):
                 if scope in used_scopes:
@@ -1182,15 +1167,12 @@ def _idval(val, argname, idx, idfn, item, config):
         except Exception as e:
             # See issue https://github.com/pytest-dev/pytest/issues/2169
             msg = "{}: error raised while trying to determine id of parameter '{}' at position {}\n"
-            msg = msg.format(item.nodeid, argname, idx)
-            # we only append the exception type and message because on Python 2 reraise does nothing
-            msg += "  {}: {}\n".format(type(e).__name__, e)
+            msg = f"{msg.format(item.nodeid, argname, idx)}  {type(e).__name__}: {e}\n"
             six.raise_from(ValueError(msg), e)
     elif config:
-        hook_id = config.hook.pytest_make_parametrize_id(
+        if hook_id := config.hook.pytest_make_parametrize_id(
             config=config, val=val, argname=argname
-        )
-        if hook_id:
+        ):
             return hook_id
 
     if isinstance(val, STRING_TYPES):
@@ -1337,30 +1319,22 @@ def _showfixtures_main(config, session):
         if currentmodule != module:
             if not module.startswith("_pytest."):
                 tw.line()
-                tw.sep("-", "fixtures defined from %s" % (module,))
+                tw.sep("-", f"fixtures defined from {module}")
                 currentmodule = module
         if verbose <= 0 and argname[0] == "_":
             continue
-        if verbose > 0:
-            funcargspec = "%s -- %s" % (argname, bestrel)
-        else:
-            funcargspec = argname
+        funcargspec = f"{argname} -- {bestrel}" if verbose > 0 else argname
         tw.line(funcargspec, green=True)
         loc = getlocation(fixturedef.func, curdir)
-        doc = fixturedef.func.__doc__ or ""
-        if doc:
+        if doc := fixturedef.func.__doc__ or "":
             write_docstring(tw, doc)
         else:
-            tw.line("    %s: no docstring available" % (loc,), red=True)
+            tw.line(f"    {loc}: no docstring available", red=True)
 
 
 def write_docstring(tw, doc, indent="    "):
     doc = doc.rstrip()
-    if "\n" in doc:
-        firstline, rest = doc.split("\n", 1)
-    else:
-        firstline, rest = doc, ""
-
+    firstline, rest = doc.split("\n", 1) if "\n" in doc else (doc, "")
     if firstline.strip():
         tw.line(indent + firstline.strip())
 

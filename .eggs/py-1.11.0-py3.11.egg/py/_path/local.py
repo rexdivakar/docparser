@@ -25,7 +25,7 @@ if ALLOW_IMPORTLIB_MODE:
 
 class Stat(object):
     def __getattr__(self, name):
-        return getattr(self._osstatresult, "st_" + name)
+        return getattr(self._osstatresult, f"st_{name}")
 
     def __init__(self, path, osstatresult):
         self.path = path
@@ -240,10 +240,10 @@ class LocalPath(FSBase):
         f = self.open('rb')
         try:
             while 1:
-                buf = f.read(chunksize)
-                if not buf:
+                if buf := f.read(chunksize):
+                    hash.update(buf)
+                else:
                     return hash.hexdigest()
-                hash.update(buf)
         finally:
             f.close()
 
@@ -275,7 +275,7 @@ class LocalPath(FSBase):
                 pass
             else:
                 if ext and not ext.startswith('.'):
-                    ext = '.' + ext
+                    ext = f'.{ext}'
             kw['basename'] = pb + ext
 
         if ('dirname' in kw and not kw['dirname']):
@@ -305,10 +305,7 @@ class LocalPath(FSBase):
                     append(basename)
                 else:
                     i = basename.rfind('.')
-                    if i == -1:
-                        purebasename, ext = basename, ''
-                    else:
-                        purebasename, ext = basename[:i], basename[i:]
+                    purebasename, ext = (basename, '') if i == -1 else (basename[:i], basename[i:])
                     if name == 'purebasename':
                         append(purebasename)
                     elif name == 'ext':
@@ -397,9 +394,7 @@ class LocalPath(FSBase):
         if isinstance(fil, py.builtin._basestring):
             if not self._patternchars.intersection(fil):
                 child = self._fastjoin(fil)
-                if exists(child.strpath):
-                    return [child]
-                return []
+                return [child] if exists(child.strpath) else []
             fil = common.FNMatcher(fil)
         names = py.error.checked_call(os.listdir, self.strpath)
         res = []
@@ -500,12 +495,12 @@ class LocalPath(FSBase):
         if 'b' in mode:
             if not py.builtin._isbytes(data):
                 raise ValueError("can only process bytes")
-        else:
-            if not py.builtin._istext(data):
-                if not py.builtin._isbytes(data):
-                    data = str(data)
-                else:
-                    data = py.builtin._totext(data, sys.getdefaultencoding())
+        elif not py.builtin._istext(data):
+            data = (
+                str(data)
+                if not py.builtin._isbytes(data)
+                else py.builtin._totext(data, sys.getdefaultencoding())
+            )
         f = self.open(mode)
         try:
             f.write(data)
@@ -536,11 +531,10 @@ class LocalPath(FSBase):
         p = self.join(*args)
         if kwargs.get('dir', 0):
             return p._ensuredirs()
-        else:
-            p.dirpath()._ensuredirs()
-            if not p.check(file=1):
-                p.open('w').close()
-            return p
+        p.dirpath()._ensuredirs()
+        if not p.check(file=1):
+            p.open('w').close()
+        return p
 
     def stat(self, raising=True):
         """ Return an os.stat() tuple. """
@@ -642,9 +636,8 @@ class LocalPath(FSBase):
             if ensuremode == "append":
                 if s not in sys.path:
                     sys.path.append(s)
-            else:
-                if s != sys.path[0]:
-                    sys.path.insert(0, s)
+            elif s != sys.path[0]:
+                sys.path.insert(0, s)
 
     def pyimport(self, modname=None, ensuresyspath=True):
         """ return path as an imported python module.
@@ -679,10 +672,7 @@ class LocalPath(FSBase):
             spec = importlib.util.spec_from_file_location(
                 modname, str(self))
             if spec is None:
-                raise ImportError(
-                    "Can't find module %s at location %s" %
-                    (modname, str(self))
-                )
+                raise ImportError(f"Can't find module {modname} at location {str(self)}")
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             return mod
@@ -710,8 +700,8 @@ class LocalPath(FSBase):
             if modfile[-4:] in ('.pyc', '.pyo'):
                 modfile = modfile[:-1]
             elif modfile.endswith('$py.class'):
-                modfile = modfile[:-9] + '.py'
-            if modfile.endswith(os.path.sep + "__init__.py"):
+                modfile = f'{modfile[:-9]}.py'
+            if modfile.endswith(f"{os.path.sep}__init__.py"):
                 if self.basename != "__init__.py":
                     modfile = modfile[:-12]
             try:
@@ -759,7 +749,7 @@ class LocalPath(FSBase):
                                            stdout, stderr,)
         return stdout
 
-    def sysfind(cls, name, checker=None, paths=None):
+    def sysfind(self, name, checker=None, paths=None):
         """ return a path object found by looking at the systems
             underlying PATH specification. If the checker is not None
             it will be invoked to filter matching paths.  If a binary
@@ -805,7 +795,7 @@ class LocalPath(FSBase):
         return None
     sysfind = classmethod(sysfind)
 
-    def _gethomedir(cls):
+    def _gethomedir(self):
         try:
             x = os.environ['HOME']
         except KeyError:
@@ -813,7 +803,7 @@ class LocalPath(FSBase):
                 x = os.environ["HOMEDRIVE"] + os.environ['HOMEPATH']
             except KeyError:
                 return None
-        return cls(x)
+        return self(x)
     _gethomedir = classmethod(_gethomedir)
 
     # """
@@ -838,7 +828,7 @@ class LocalPath(FSBase):
         return cls(py.error.checked_call(tempfile.mkdtemp, dir=str(rootdir)))
 
     def make_numbered_dir(cls, prefix='session-', rootdir=None, keep=3,
-                          lock_timeout=172800):   # two days
+                          lock_timeout=172800):    # two days
         """ return unique directory with a number greater than the current
             maximum one.  The number is assumed to start directly after prefix.
             if keep is true directories with a number less than (maxnum-keep)
@@ -924,7 +914,7 @@ class LocalPath(FSBase):
             except py.error.Error:
                 pass
 
-        garbage_prefix = prefix + 'garbage-'
+        garbage_prefix = f'{prefix}garbage-'
 
         def is_garbage(path):
             """ check if path denotes directory scheduled for removal """
@@ -1014,10 +1004,10 @@ def copychunked(src, dest):
         fdest = dest.open('wb')
         try:
             while 1:
-                buf = fsrc.read(chunksize)
-                if not buf:
+                if buf := fsrc.read(chunksize):
+                    fdest.write(buf)
+                else:
                     break
-                fdest.write(buf)
         finally:
             fdest.close()
     finally:

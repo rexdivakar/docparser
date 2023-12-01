@@ -15,9 +15,9 @@ class SafeRepr(reprlib.Repr):
         # Strictly speaking wrong on narrow builds
         def repr(u):
             if "'" not in u:
-                return u"'%s'" % u
+                return f"'{u}'"
             elif '"' not in u:
-                return u'"%s"' % u
+                return f'"{u}"'
             else:
                 return u"'%s'" % u.replace("'", r"\'")
 
@@ -26,7 +26,7 @@ class SafeRepr(reprlib.Repr):
             i = max(0, (self.maxstring - 3) // 2)
             j = max(0, self.maxstring - 3 - i)
             s = repr(x[:i] + x[len(x) - j :])
-            s = s[:i] + "..." + s[len(s) - j :]
+            s = f"{s[:i]}...{s[len(s) - j:]}"
         return s
 
     def repr_instance(self, x, level):
@@ -53,7 +53,7 @@ class SafeRepr(reprlib.Repr):
             if len(s) > self.maxsize:
                 i = max(0, (self.maxsize - 3) // 2)
                 j = max(0, self.maxsize - 3 - i)
-                s = s[:i] + "..." + s[len(s) - j :]
+                s = f"{s[:i]}...{s[len(s) - j:]}"
             return s
 
 

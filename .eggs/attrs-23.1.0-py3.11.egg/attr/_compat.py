@@ -95,12 +95,6 @@ def make_set_closure_cell():
                 x = value
                 return
 
-                # This function will be eliminated as dead code, but
-                # not before its reference to `x` forces `x` to be
-                # represented as a closure cell rather than a local.
-                def force_x_to_be_a_cell():  # pragma: no cover
-                    return x
-
             # Extract the code object and make sure our assumptions about
             # the closure behavior are correct.
             co = set_first_cellvar_to.__code__
@@ -180,6 +174,4 @@ repr_context = threading.local()
 
 def get_generic_base(cl):
     """If this is a generic class (A[str]), return the generic base for it."""
-    if cl.__class__ is _GenericAlias:
-        return cl.__origin__
-    return None
+    return cl.__origin__ if cl.__class__ is _GenericAlias else None

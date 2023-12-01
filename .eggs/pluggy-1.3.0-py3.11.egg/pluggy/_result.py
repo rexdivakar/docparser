@@ -57,10 +57,7 @@ class Result(Generic[ResultType]):
     def excinfo(self) -> _ExcInfo | None:
         """:meta private:"""
         exc = self._exception
-        if exc is None:
-            return None
-        else:
-            return (type(exc), exc, exc.__traceback__)
+        return None if exc is None else (type(exc), exc, exc.__traceback__)
 
     @property
     def exception(self) -> BaseException | None:

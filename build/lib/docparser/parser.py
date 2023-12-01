@@ -61,14 +61,14 @@ class PdfParser:
         # if only one language provided as a string:
         if type(page_langs) == str: 
             page_langs = [page_langs[::] for _ in range(len(page_nums))]
-        page_settings = {page_num: page_lang for page_num, page_lang in zip(page_nums, page_langs)}
+        page_settings = dict(zip(page_nums, page_langs))
 
         # 0. count pdf pages.
         num_pages = count_pdf_pages(pdf_path)
 
         # 1. very all pages and languages specified
         assert verify_langs(page_settings, num_pages)
-        
+
         # 2. parse all pages that are verified and stage for processing in page objects
         page_nums = sorted(list(page_settings.keys()))
         page_langs = [page_settings[page_num] for page_num in page_nums]
@@ -78,7 +78,7 @@ class PdfParser:
             for page_image_group in [get_page_images(pdf_path, dpi, first_page, last_page) for (first_page, last_page) in page_groups]
             for page_image in page_image_group
         ]
-        
+
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         model, preprocess = clip.load(clip_model_name, device=device)
         self.pages = {
@@ -95,14 +95,14 @@ class DictParser:
         # if only one language provided as a string:
         if type(page_langs) == str: 
             page_langs = [page_langs[::] for _ in range(len(page_nums))]
-        page_settings = {page_num: page_lang for page_num, page_lang in zip(page_nums, page_langs)}
+        page_settings = dict(zip(page_nums, page_langs))
 
         # 0. count pdf pages.
         num_pages = count_pdf_pages(pdf_path)
 
         # 1. very all pages and languages specified
         assert verify_langs(page_settings, num_pages)
-        
+
         # 2. parse all pages that are verified and stage for processing in page objects
         page_nums = sorted(list(page_settings.keys()))
         page_langs = [page_settings[page_num] for page_num in page_nums]
@@ -112,7 +112,7 @@ class DictParser:
             for page_image_group in [get_page_images(pdf_path, dpi, first_page, last_page) for (first_page, last_page) in page_groups]
             for page_image in page_image_group
         ]
-        
+
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         model, preprocess = clip.load(clip_model_name, device=device)
         self.pages = {

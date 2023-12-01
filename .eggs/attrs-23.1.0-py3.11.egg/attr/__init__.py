@@ -115,7 +115,7 @@ def _make_getattr(mod_name: str) -> Callable:
             return "MIT"
         elif name == "__copyright__":
             return "Copyright (c) 2015 Hynek Schlawack"
-        elif name in ("__uri__", "__url__"):
+        elif name in {"__uri__", "__url__"}:
             return meta["Project-URL"].split(" ", 1)[-1]
         elif name == "__version_info__":
             return VersionInfo._from_version_string(meta["version"])

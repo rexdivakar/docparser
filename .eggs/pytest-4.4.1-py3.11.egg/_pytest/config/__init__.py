@@ -82,7 +82,7 @@ def main(args=None, plugins=None):
     except UsageError as e:
         tw = py.io.TerminalWriter(sys.stderr)
         for msg in e.args:
-            tw.line("ERROR: {}\n".format(msg), red=True)
+            tw.line(f"ERROR: {msg}\n", red=True)
         return EXIT_USAGEERROR
 
 
@@ -97,7 +97,7 @@ def filename_arg(path, optname):
     :optname: name of the option
     """
     if os.path.isdir(path):
-        raise UsageError("{} must be a filename, given: {}".format(optname, path))
+        raise UsageError(f"{optname} must be a filename, given: {path}")
     return path
 
 
@@ -108,7 +108,7 @@ def directory_arg(path, optname):
     :optname: name of the option
     """
     if not os.path.isdir(path):
-        raise UsageError("{} must be a directory, given: {}".format(optname, path))
+        raise UsageError(f"{optname} must be a directory, given: {path}")
     return path
 
 
@@ -306,10 +306,7 @@ class PytestPluginManager(PluginManager):
         if name in ["pytest_catchlog", "pytest_capturelog"]:
             warnings.warn(
                 PytestWarning(
-                    "{} plugin has been merged into the core, "
-                    "please remove it from your requirements.".format(
-                        name.replace("_", "-")
-                    )
+                    f'{name.replace("_", "-")} plugin has been merged into the core, please remove it from your requirements.'
                 )
             )
             return
@@ -393,11 +390,7 @@ class PytestPluginManager(PluginManager):
         if self._noconftest:
             return []
 
-        if path.isfile():
-            directory = path.dirpath()
-        else:
-            directory = path
-
+        directory = path.dirpath() if path.isfile() else path
         if six.PY2:  # py2 is not using lru_cache.
             try:
                 return self._dirpath2confmods[directory]
@@ -503,7 +496,7 @@ class PytestPluginManager(PluginManager):
 
             self.set_blocked(name)
             if not name.startswith("pytest_"):
-                self.set_blocked("pytest_" + name)
+                self.set_blocked(f"pytest_{name}")
         else:
             name = arg
             # Unblock the plugin.  None indicates that it has been blocked.
@@ -511,8 +504,8 @@ class PytestPluginManager(PluginManager):
             if self._name2plugin.get(name, -1) is None:
                 del self._name2plugin[name]
             if not name.startswith("pytest_"):
-                if self._name2plugin.get("pytest_" + name, -1) is None:
-                    del self._name2plugin["pytest_" + name]
+                if self._name2plugin.get(f"pytest_{name}", -1) is None:
+                    del self._name2plugin[f"pytest_{name}"]
             self.import_plugin(arg, consider_entry_points=True)
 
     def consider_conftest(self, conftestmodule):
@@ -545,21 +538,19 @@ class PytestPluginManager(PluginManager):
         if self.is_blocked(modname) or self.get_plugin(modname) is not None:
             return
 
-        importspec = "_pytest." + modname if modname in builtin_plugins else modname
+        importspec = f"_pytest.{modname}" if modname in builtin_plugins else modname
         self.rewrite_hook.mark_rewrite(importspec)
 
         if consider_entry_points:
-            loaded = self.load_setuptools_entrypoints("pytest11", name=modname)
-            if loaded:
+            if loaded := self.load_setuptools_entrypoints(
+                "pytest11", name=modname
+            ):
                 return
 
         try:
             __import__(importspec)
         except ImportError as e:
-            new_exc_message = 'Error importing plugin "%s": %s' % (
-                modname,
-                safe_str(e.args[0]),
-            )
+            new_exc_message = f'Error importing plugin "{modname}": {safe_str(e.args[0])}'
             new_exc = ImportError(new_exc_message)
             tb = sys.exc_info()[2]
 
@@ -621,8 +612,7 @@ def _iter_rewritable_modules(package_files):
             module_name, _ = os.path.splitext(fn)
             yield module_name
         elif is_package:
-            package_name = os.path.dirname(fn)
-            yield package_name
+            yield os.path.dirname(fn)
 
 
 class Config(object):
@@ -699,10 +689,7 @@ class Config(object):
         return self
 
     def notify_exception(self, excinfo, option=None):
-        if option and option.fulltrace:
-            style = "long"
-        else:
-            style = "native"
+        style = "long" if option and option.fulltrace else "native"
         excrepr = excinfo.getrepr(
             funcargs=True, showlocals=getattr(option, "showlocals", False), style=style
         )
@@ -858,9 +845,7 @@ class Config(object):
                 from _pytest.warnings import _issue_warning_captured
 
                 _issue_warning_captured(
-                    PytestWarning(
-                        "could not load initial conftests: {}".format(e.path)
-                    ),
+                    PytestWarning(f"could not load initial conftests: {e.path}"),
                     self.hook,
                     stacklevel=2,
                 )
@@ -871,8 +856,7 @@ class Config(object):
         import pytest
         from pkg_resources import parse_version
 
-        minver = self.inicfg.get("minversion", None)
-        if minver:
+        if minver := self.inicfg.get("minversion", None):
             if parse_version(minver) > parse_version(pytest.__version__):
                 raise pytest.UsageError(
                     "%s:%d: requires pytest-%s, actual pytest-%s'"
@@ -904,8 +888,8 @@ class Config(object):
             if not args:
                 if self.invocation_dir == self.rootdir:
                     args = self.getini("testpaths")
-                if not args:
-                    args = [str(self.invocation_dir)]
+            if not args:
+                args = [str(self.invocation_dir)]
             self.args = args
         except PrintHelp:
             pass
@@ -941,21 +925,16 @@ class Config(object):
             except KeyError:
                 if default is not None:
                     return default
-                if type is None:
-                    return ""
-                return []
-        if type == "pathlist":
-            dp = py.path.local(self.inicfg.config.path).dirpath()
-            values = []
-            for relpath in shlex.split(value):
-                values.append(dp.join(relpath, abs=True))
-            return values
-        elif type == "args":
+                return "" if type is None else []
+        if type == "args":
             return shlex.split(value)
-        elif type == "linelist":
-            return [t for t in map(lambda x: x.strip(), value.split("\n")) if t]
         elif type == "bool":
             return bool(_strtobool(value.strip()))
+        elif type == "linelist":
+            return [t for t in map(lambda x: x.strip(), value.split("\n")) if t]
+        elif type == "pathlist":
+            dp = py.path.local(self.inicfg.config.path).dirpath()
+            return [dp.join(relpath, abs=True) for relpath in shlex.split(value)]
         else:
             assert type is None
             return value
@@ -1056,7 +1035,7 @@ def setns(obj, dic):
         if isinstance(value, dict):
             mod = getattr(obj, name, None)
             if mod is None:
-                modname = "pytest.%s" % name
+                modname = f"pytest.{name}"
                 mod = types.ModuleType(modname)
                 sys.modules[modname] = mod
                 mod.__all__ = []
@@ -1077,10 +1056,10 @@ def create_terminal_writer(config, *args, **kwargs):
     and has access to a config object should use this function.
     """
     tw = py.io.TerminalWriter(*args, **kwargs)
-    if config.option.color == "yes":
-        tw.hasmarkup = True
     if config.option.color == "no":
         tw.hasmarkup = False
+    elif config.option.color == "yes":
+        tw.hasmarkup = True
     return tw
 
 

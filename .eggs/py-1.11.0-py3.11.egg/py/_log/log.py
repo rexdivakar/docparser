@@ -27,7 +27,7 @@ class Message(object):
         return " ".join(map(str, self.args))
 
     def prefix(self):
-        return "[%s] " % (":".join(self.keywords))
+        return f'[{":".join(self.keywords)}] '
 
     def __str__(self):
         return self.prefix() + self.content()
@@ -51,7 +51,7 @@ class Producer(object):
         self._keywordmapper = keywordmapper
 
     def __repr__(self):
-        return "<py.log.Producer %s>" % ":".join(self._keywords)
+        return f'<py.log.Producer {":".join(self._keywords)}>'
 
     def __getattr__(self, name):
         if '_' in name:
@@ -156,7 +156,7 @@ class Path(object):
             self._openfile()
 
     def _openfile(self):
-        mode = self._append and 'a' or 'w'
+        mode = 'a' if self._append else 'w'
         f = open(self._filename, mode)
         self._file = f
 
@@ -199,7 +199,7 @@ except ImportError:
     pass
 else:
     for _prio in "EMERG ALERT CRIT ERR WARNING NOTICE INFO DEBUG".split():
-        _prio = "LOG_" + _prio
+        _prio = f"LOG_{_prio}"
         try:
             setattr(Syslog, _prio, getattr(syslog, _prio))
         except AttributeError:
